@@ -196,9 +196,3 @@ std::unique_ptr<nam::ModelConfig> nam::lstm::create_config(const nlohmann::json&
   *c = parsed;
   return c;
 }
-
-// Register the config parser
-namespace
-{
-static nam::ConfigParserHelper _register_LSTM("LSTM", nam::lstm::create_config);
-}

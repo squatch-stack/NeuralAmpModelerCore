@@ -40,6 +40,7 @@
 #include "test/test_render_slim.cpp"
 #include "test/test_slimmable_wavenet.cpp"
 #include "test/test_a2_fast.cpp"
+#include "test/test_builtin_registration.cpp"
 
 int main()
 {
@@ -341,6 +342,10 @@ int main()
 
   // Extensibility: external architecture registration and get_dsp (issue #230)
   test_extensible::run_extensibility_tests();
+
+  // Built-in architectures are registered by the registry itself (issue #327)
+  test_builtin_registration::test_builtins_registered();
+  test_builtin_registration::test_builtin_cannot_be_registered_again();
 
   // Container / SlimmableContainer tests
   test_container::test_container_loads_from_json();

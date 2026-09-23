@@ -238,7 +238,5 @@ std::unique_ptr<ModelConfig> create_config(const nlohmann::json& config, const d
   return parsed;
 }
 
-static ConfigParserHelper _register_Sequential("Sequential", create_config);
-
 } // namespace sequential
 } // namespace nam

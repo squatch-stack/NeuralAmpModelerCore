@@ -54,11 +54,11 @@ using ConfigParserFunction = std::function<std::unique_ptr<ModelConfig>(const nl
 class ConfigParserRegistry
 {
 public:
-  static ConfigParserRegistry& instance()
-  {
-    static ConfigParserRegistry inst;
-    return inst;
-  }
+  /// \brief Get the registry
+  ///
+  /// Core's own architectures are registered on first use, so they are available however Core is linked and
+  /// whatever the order of static initialization.
+  static ConfigParserRegistry& instance();
 
   /// \brief Register a config parser for an architecture
   /// \param name Architecture name (e.g., "WaveNet", "LSTM")
