@@ -178,6 +178,8 @@ nam::convnet::ConvNet::ConvNet(const int in_channels, const int out_channels, co
                                const activations::ActivationConfig& activation_config, std::vector<float>& weights,
                                const double expected_sample_rate, const int groups)
 : Buffer(in_channels, out_channels, *std::max_element(dilations.begin(), dilations.end()), expected_sample_rate)
+, _chunk_input_ptrs(in_channels)
+, _chunk_output_ptrs(out_channels)
 {
   this->_verify_weights(channels, dilations, batchnorm, weights.size());
   this->_blocks.resize(dilations.size());
@@ -203,26 +205,8 @@ nam::convnet::ConvNet::ConvNet(const int in_channels, const int out_channels, co
 }
 
 
-void nam::convnet::ConvNet::process(NAM_SAMPLE** input, NAM_SAMPLE** output, const int num_frames)
-
+void nam::convnet::ConvNet::_process_blocks(const Eigen::MatrixXf& input_matrix, const int num_frames)
 {
-  this->_update_buffers_(input, num_frames);
-  const int in_channels = NumInputChannels();
-  const int out_channels = NumOutputChannels();
-
-  // For multi-channel, we process each input channel independently through the network
-  // and sum outputs to each output channel (simple implementation)
-  // This can be extended later for more sophisticated cross-channel processing
-
-  // Convert input buffers to matrix for first layer (stack input channels)
-  Eigen::MatrixXf input_matrix(in_channels, num_frames);
-  const long i_start = this->_input_buffer_offset;
-  for (int ch = 0; ch < in_channels; ch++)
-  {
-    for (int i = 0; i < num_frames; i++)
-      input_matrix(ch, i) = this->_input_buffers[ch][i_start + i];
-  }
-
   // Process through ConvNetBlock layers
   // Each block now uses Conv1D's internal buffers via Process() and GetOutput()
   for (size_t i = 0; i < this->_blocks.size(); i++)
@@ -244,6 +228,55 @@ void nam::convnet::ConvNet::process(NAM_SAMPLE** input, NAM_SAMPLE** output, con
     // Process block (handles Conv1D, batchnorm, and activation internally)
     this->_blocks[i].Process(block_input, num_frames);
   }
+}
+
+void nam::convnet::ConvNet::_process_in_chunks(NAM_SAMPLE** input, NAM_SAMPLE** output, const int num_frames)
+{
+  for (int offset = 0; offset < num_frames; offset += mMaxBufferSize)
+  {
+    for (size_t ch = 0; ch < this->_chunk_input_ptrs.size(); ch++)
+    {
+      this->_chunk_input_ptrs[ch] = input[ch] + offset;
+    }
+    for (size_t ch = 0; ch < this->_chunk_output_ptrs.size(); ch++)
+    {
+      this->_chunk_output_ptrs[ch] = output[ch] + offset;
+    }
+    // Qualified, so that a subclass's override isn't re-entered for every chunk
+    ConvNet::process(
+      this->_chunk_input_ptrs.data(), this->_chunk_output_ptrs.data(), std::min(mMaxBufferSize, num_frames - offset));
+  }
+}
+
+void nam::convnet::ConvNet::process(NAM_SAMPLE** input, NAM_SAMPLE** output, const int num_frames)
+
+{
+  // Each block's Conv1D holds mMaxBufferSize frames, so a larger call is split instead of overrunning it
+  if (num_frames > mMaxBufferSize && mMaxBufferSize > 0)
+  {
+    this->_process_in_chunks(input, output, num_frames);
+    return;
+  }
+  this->_update_buffers_(input, num_frames);
+  const int in_channels = NumInputChannels();
+  const int out_channels = NumOutputChannels();
+
+  // For multi-channel, we process each input channel independently through the network
+  // and sum outputs to each output channel (simple implementation)
+  // This can be extended later for more sophisticated cross-channel processing
+
+  // Convert input buffers to matrix for first layer (stack input channels)
+  Eigen::MatrixXf input_matrix(in_channels, num_frames);
+  const long i_start = this->_input_buffer_offset;
+  for (int ch = 0; ch < in_channels; ch++)
+  {
+    for (int i = 0; i < num_frames; i++)
+    {
+      input_matrix(ch, i) = this->_input_buffers[ch][i_start + i];
+    }
+  }
+
+  this->_process_blocks(input_matrix, num_frames);
 
   // Process head for all output channels at once
   // We need _block_vals[0] for the head interface

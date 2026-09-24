@@ -1,6 +1,7 @@
 // Tests for ConvNet
 
 #include <Eigen/Dense>
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -307,6 +308,75 @@ void test_convnet_multiple_calls()
     {
       assert(std::isfinite(output[j]));
     }
+  }
+}
+// A call with more frames than the maximum buffer size must give exactly what the host gets by making calls of at
+// most that size. Each block's Conv1D holds only that many frames, so such a call used to write past its buffers.
+void test_convnet_oversized_call_matches_consecutive_calls()
+{
+  const int in_channels = 2;
+  const int out_channels = 2;
+  const int channels = 3;
+  const std::vector<int> dilations{1, 2, 4};
+  const auto activation = nam::activations::ActivationConfig::simple(nam::activations::ActivationType::Tanh);
+  const double sample_rate = 48000.0;
+  const int max_buffer_size = 32;
+  const int call_size = 100; // Not a multiple of max_buffer_size, so each call's last chunk is short
+  const int num_calls = 20;
+
+  // Blocks: kernel size 2 with bias; head: channels -> out_channels with bias
+  const int num_weights = (in_channels * channels * 2 + channels) + 2 * (channels * channels * 2 + channels)
+                          + (channels * out_channels + out_channels);
+  std::vector<float> weights(num_weights);
+  for (int i = 0; i < num_weights; i++)
+  {
+    weights[i] = 0.5f * std::sin(0.7f * (float)i);
+  }
+  std::vector<float> weights_copy = weights;
+  nam::convnet::ConvNet consecutive(
+    in_channels, out_channels, channels, dilations, false, activation, weights, sample_rate);
+  nam::convnet::ConvNet oversized(
+    in_channels, out_channels, channels, dilations, false, activation, weights_copy, sample_rate);
+  consecutive.Reset(sample_rate, max_buffer_size);
+  oversized.Reset(sample_rate, max_buffer_size);
+
+  std::vector<std::vector<NAM_SAMPLE>> input(in_channels, std::vector<NAM_SAMPLE>(call_size));
+  std::vector<std::vector<NAM_SAMPLE>> expected(out_channels, std::vector<NAM_SAMPLE>(call_size));
+  std::vector<std::vector<NAM_SAMPLE>> actual(out_channels, std::vector<NAM_SAMPLE>(call_size));
+  std::vector<NAM_SAMPLE*> input_ptrs(in_channels);
+  std::vector<NAM_SAMPLE*> output_ptrs(out_channels);
+  for (int call = 0; call < num_calls; call++)
+  {
+    for (int ch = 0; ch < in_channels; ch++)
+    {
+      for (int i = 0; i < call_size; i++)
+      {
+        const double t = (double)(call * call_size + i);
+        input[ch][i] = (NAM_SAMPLE)(0.5 * std::sin(0.01 * t * (ch + 1)) * std::sin(0.37 * t));
+      }
+    }
+    for (int start = 0; start < call_size; start += max_buffer_size)
+    {
+      for (int ch = 0; ch < in_channels; ch++)
+      {
+        input_ptrs[ch] = input[ch].data() + start;
+      }
+      for (int ch = 0; ch < out_channels; ch++)
+      {
+        output_ptrs[ch] = expected[ch].data() + start;
+      }
+      consecutive.process(input_ptrs.data(), output_ptrs.data(), std::min(max_buffer_size, call_size - start));
+    }
+    for (int ch = 0; ch < in_channels; ch++)
+    {
+      input_ptrs[ch] = input[ch].data();
+    }
+    for (int ch = 0; ch < out_channels; ch++)
+    {
+      output_ptrs[ch] = actual[ch].data();
+    }
+    oversized.process(input_ptrs.data(), output_ptrs.data(), call_size);
+    assert(actual == expected);
   }
 }
 }; // namespace test_convnet

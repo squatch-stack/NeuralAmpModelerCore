@@ -142,6 +142,8 @@ public:
   ~ConvNet() = default;
 
   /// \brief Process audio frames
+  ///
+  /// A call with more frames than the maximum buffer size is processed as consecutive calls of at most that size.
   /// \param input Input audio buffers
   /// \param output Output audio buffers
   /// \param num_frames Number of frames to process
@@ -164,6 +166,17 @@ protected:
   void _rewind_buffers_() override;
 
   int mPrewarmSamples = 0; // Pre-compute during initialization
+
+private:
+  /// \brief Run the blocks on the input, each on the previous one's output
+  void _process_blocks(const Eigen::MatrixXf& input_matrix, const int num_frames);
+
+  // Per-channel pointers for _process_in_chunks(), sized at construction
+  std::vector<NAM_SAMPLE*> _chunk_input_ptrs;
+  std::vector<NAM_SAMPLE*> _chunk_output_ptrs;
+
+  /// \brief Process a call larger than the maximum buffer size as consecutive calls of at most that size
+  void _process_in_chunks(NAM_SAMPLE** input, NAM_SAMPLE** output, const int num_frames);
 };
 
 /// \brief Configuration for a ConvNet model

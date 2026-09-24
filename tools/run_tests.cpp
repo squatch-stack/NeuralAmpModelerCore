@@ -252,6 +252,7 @@ int main()
   test_convnet::test_convnet_different_buffer_sizes();
   test_convnet::test_convnet_prewarm();
   test_convnet::test_convnet_multiple_calls();
+  test_convnet::test_convnet_oversized_call_matches_consecutive_calls();
 
   // LSTM tests
   test_lstm::test_lstm_basic();
