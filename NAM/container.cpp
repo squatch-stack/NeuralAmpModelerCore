@@ -176,8 +176,5 @@ std::unique_ptr<ModelConfig> create_config(const nlohmann::json& config, double 
   return c;
 }
 
-// Auto-register
-static ConfigParserHelper _register_SlimmableContainer("SlimmableContainer", create_config);
-
 } // namespace container
 } // namespace nam

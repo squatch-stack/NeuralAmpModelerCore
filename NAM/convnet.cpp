@@ -354,8 +354,3 @@ std::unique_ptr<nam::ModelConfig> nam::convnet::create_config(const nlohmann::js
   *c = parsed;
   return c;
 }
-
-namespace
-{
-static nam::ConfigParserHelper _register_ConvNet("ConvNet", nam::convnet::create_config);
-}

@@ -13,6 +13,13 @@
 #include "model_config.h"
 #include "wav.h"
 
+#include "container.h"
+#include "convnet.h"
+#include "linear.h"
+#include "lstm.h"
+#include "sequential.h"
+#include "wavenet/model.h"
+
 namespace nam
 {
 namespace
@@ -214,6 +221,37 @@ std::unique_ptr<DSP> get_dsp(const nlohmann::json& config, dspData& returnedConf
   dspData conf = returnedConfig;
 
   return get_dsp(conf, options);
+}
+
+// =============================================================================
+// Config parser registry
+// =============================================================================
+
+namespace
+{
+
+// Naming every built-in create_config here, next to ConfigParserRegistry::instance(), is what makes any program that
+// uses the registry link all of them. Each architecture used to register itself from a static object in its own
+// translation unit, which a static-library link drops when nothing else references that unit.
+ConfigParserRegistry registry_with_builtins()
+{
+  ConfigParserRegistry registry;
+  registry.registerParser("ConvNet", convnet::create_config);
+  registry.registerParser("Linear", linear::create_config);
+  registry.registerParser("LSTM", lstm::create_config);
+  registry.registerParser("Sequential", sequential::create_config);
+  registry.registerParser("SlimmableContainer", container::create_config);
+  registry.registerParser("WaveNet", wavenet::create_config);
+  return registry;
+}
+
+} // anonymous namespace
+
+ConfigParserRegistry& ConfigParserRegistry::instance()
+{
+  // Initialization of a function-local static is thread-safe, so concurrent first calls register the built-ins once
+  static ConfigParserRegistry inst = registry_with_builtins();
+  return inst;
 }
 
 // =============================================================================

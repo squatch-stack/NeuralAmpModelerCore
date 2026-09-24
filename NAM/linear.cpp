@@ -542,8 +542,3 @@ std::unique_ptr<nam::ModelConfig> nam::linear::create_config(const nlohmann::jso
   *c = parsed;
   return c;
 }
-
-namespace
-{
-static nam::ConfigParserHelper _register_Linear("Linear", nam::linear::create_config);
-}

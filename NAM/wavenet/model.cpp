@@ -1327,9 +1327,3 @@ std::unique_ptr<nam::ModelConfig> nam::wavenet::create_config(const nlohmann::js
   *wc = std::move(parsed);
   return wc;
 }
-
-// Register the config parser
-namespace
-{
-static nam::ConfigParserHelper _register_WaveNet("WaveNet", nam::wavenet::create_config);
-}
